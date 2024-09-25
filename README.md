@@ -1,13 +1,11 @@
-# Sample Hardhat Project
+# Simple Increment App deployed on Sepolia ETH
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, and a Hardhat Ignition module that deploys that contract.
+This project demosntrate on basic usage of blokchain.
 
-Try running some of the following tasks:
-
-```shell
-npx hardhat help
-npx hardhat test
-REPORT_GAS=true npx hardhat test
-npx hardhat node
-npx hardhat ignition deploy ./ignition/modules/Lock.js
+For usage:
 ```
+cd frontend
+npm run dev
+```
+
+Any inquires,do not hesitate to contact me
