@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './App.css';
 import { ethers } from "ethers";
 import incrementContract from "./Increment.json";
@@ -34,6 +34,38 @@ function App() {
     }
   };
 
+  // Function to change wallet manually
+  const changeWallet = async () => {
+    if (window.ethereum) {
+      try {
+        await window.ethereum.request({ method: 'wallet_requestPermissions', params: [{ eth_accounts: {} }] });
+        await connectWallet(); // Reconnect after changing wallets
+      } catch (error) {
+        console.error("Error changing wallet:", error);
+      }
+    }
+  };
+
+  // Listen to MetaMask account change events
+  useEffect(() => {
+    if (window.ethereum) {
+      window.ethereum.on('accountsChanged', (accounts) => {
+        if (accounts.length > 0) {
+          setWalletAddress(accounts[0]);
+          connectWallet();
+        } else {
+          setWalletAddress(null);
+          setCount(null);
+          setContract(null);
+        }
+      });
+
+      return () => {
+        window.ethereum.removeListener('accountsChanged', () => {});
+      };
+    }
+  }, []);
+
   const incrementCount = async () => {
     if (contract) {
       try {
@@ -57,6 +89,7 @@ function App() {
           <p>Connected Wallet Address: {walletAddress}</p>
           <p>Current Count: {count !== null ? count : "Loading..."}</p>
           <button onClick={incrementCount}>Increment Count</button>
+          <button onClick={changeWallet}>Change Wallet</button>
         </>
       ) : (
         <button onClick={connectWallet}>Connect Wallet</button>
