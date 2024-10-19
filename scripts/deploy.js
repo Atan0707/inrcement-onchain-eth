@@ -2,8 +2,8 @@ async function main() {
     const [deployer] = await ethers.getSigners();
     console.log("Deploying contracts with the account:", deployer.address);
 
-    const Increment = await ethers.getContractFactory("Increment");
-    const increment = await Increment.deploy(0);
+    const Increment = await ethers.getContractFactory("State");
+    const increment = await Increment.deploy();
 
     console.log("Increment contract deployed to:", increment.address);
 }
