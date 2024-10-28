@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-contract LEDQuadraticVoting {
+contract testLED {
     // enum LEDState { Off, RED, GREEN, BLUE }
     // LEDState public currentState = LEDState.Off;
 

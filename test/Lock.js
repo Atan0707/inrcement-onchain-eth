@@ -1,126 +1,84 @@
-const {
-  time,
-  loadFixture,
-} = require("@nomicfoundation/hardhat-toolbox/network-helpers");
-const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");
 const { expect } = require("chai");
+const { ethers } = require("hardhat");
 
-describe("Lock", function () {
-  // We define a fixture to reuse the same setup in every test.
-  // We use loadFixture to run this setup once, snapshot that state,
-  // and reset Hardhat Network to that snapshot in every test.
-  async function deployOneYearLockFixture() {
-    const ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
-    const ONE_GWEI = 1_000_000_000;
+describe("AssetManager", function () {
+  let AssetManager, assetManager, owner, admin, addr1;
 
-    const lockedAmount = ONE_GWEI;
-    const unlockTime = (await time.latest()) + ONE_YEAR_IN_SECS;
-
-    // Contracts are deployed using the first signer/account by default
-    const [owner, otherAccount] = await ethers.getSigners();
-
-    const Lock = await ethers.getContractFactory("Lock");
-    const lock = await Lock.deploy(unlockTime, { value: lockedAmount });
-
-    return { lock, unlockTime, lockedAmount, owner, otherAccount };
-  }
+  beforeEach(async function () {
+    [owner, admin, addr1] = await ethers.getSigners();
+    AssetManager = await ethers.getContractFactory("AssetManager");
+    assetManager = await AssetManager.deploy();
+    await assetManager.waitForDeployment();
+  });
 
   describe("Deployment", function () {
-    it("Should set the right unlockTime", async function () {
-      const { lock, unlockTime } = await loadFixture(deployOneYearLockFixture);
-
-      expect(await lock.unlockTime()).to.equal(unlockTime);
-    });
-
     it("Should set the right owner", async function () {
-      const { lock, owner } = await loadFixture(deployOneYearLockFixture);
-
-      expect(await lock.owner()).to.equal(owner.address);
-    });
-
-    it("Should receive and store the funds to lock", async function () {
-      const { lock, lockedAmount } = await loadFixture(
-        deployOneYearLockFixture
-      );
-
-      expect(await ethers.provider.getBalance(lock.target)).to.equal(
-        lockedAmount
-      );
-    });
-
-    it("Should fail if the unlockTime is not in the future", async function () {
-      // We don't use the fixture here because we want a different deployment
-      const latestTime = await time.latest();
-      const Lock = await ethers.getContractFactory("Lock");
-      await expect(Lock.deploy(latestTime, { value: 1 })).to.be.revertedWith(
-        "Unlock time should be in the future"
-      );
+      expect(await assetManager.owner()).to.equal(owner.address);
     });
   });
 
-  describe("Withdrawals", function () {
-    describe("Validations", function () {
-      it("Should revert with the right error if called too soon", async function () {
-        const { lock } = await loadFixture(deployOneYearLockFixture);
-
-        await expect(lock.withdraw()).to.be.revertedWith(
-          "You can't withdraw yet"
-        );
-      });
-
-      it("Should revert with the right error if called from another account", async function () {
-        const { lock, unlockTime, otherAccount } = await loadFixture(
-          deployOneYearLockFixture
-        );
-
-        // We can increase the time in Hardhat Network
-        await time.increaseTo(unlockTime);
-
-        // We use lock.connect() to send a transaction from another account
-        await expect(lock.connect(otherAccount).withdraw()).to.be.revertedWith(
-          "You aren't the owner"
-        );
-      });
-
-      it("Shouldn't fail if the unlockTime has arrived and the owner calls it", async function () {
-        const { lock, unlockTime } = await loadFixture(
-          deployOneYearLockFixture
-        );
-
-        // Transactions are sent using the first signer by default
-        await time.increaseTo(unlockTime);
-
-        await expect(lock.withdraw()).not.to.be.reverted;
-      });
+  describe("Admin Management", function () {
+    it("Should allow owner to add admin", async function () {
+      await assetManager.addAdmin(admin.address);
+      expect(await assetManager.isAdmin(admin.address)).to.be.true;
     });
 
-    describe("Events", function () {
-      it("Should emit an event on withdrawals", async function () {
-        const { lock, unlockTime, lockedAmount } = await loadFixture(
-          deployOneYearLockFixture
-        );
+    it("Should not allow non-owner to add admin", async function () {
+      await expect(
+        assetManager.connect(addr1).addAdmin(admin.address)
+      ).to.be.revertedWith("Only owner has access");
+    });
+  });
 
-        await time.increaseTo(unlockTime);
-
-        await expect(lock.withdraw())
-          .to.emit(lock, "Withdrawal")
-          .withArgs(lockedAmount, anyValue); // We accept any value as `when` arg
-      });
+  describe("Customer Management", function () {
+    it("Should allow admin or owner to add customer data", async function () {
+      await assetManager.addAdmin(admin.address);
+      const customerId = await assetManager
+        .connect(admin)
+        .addCustomerData("John Doe", "123456", "555-5555", "123 Main St");
+      expect(customerId).to.equal(1);
     });
 
-    describe("Transfers", function () {
-      it("Should transfer the funds to the owner", async function () {
-        const { lock, unlockTime, lockedAmount, owner } = await loadFixture(
-          deployOneYearLockFixture
-        );
+    it("Should retrieve customer data correctly", async function () {
+      await assetManager.addCustomerData("John Doe", "123456", "555-5555", "123 Main St");
+      const customer = await assetManager.getCustomerData(1);
+      expect(customer.name).to.equal("John Doe");
+      expect(customer.ic).to.equal("123456");
+      expect(customer.contactNo).to.equal("555-5555");
+      expect(customer.Address).to.equal("123 Main St");
+    });
+  });
 
-        await time.increaseTo(unlockTime);
+  describe("Property Management", function () {
+    it("Should allow admin or owner to add properties", async function () {
+      await assetManager.addCustomerData("John Doe", "123456", "555-5555", "123 Main St");
+      await assetManager.addCustomerProperty(1, "House", "A nice house", "ipfs://image");
+      const properties = await assetManager.getCustomerProperties(1);
+      expect(properties[0].title).to.equal("House");
+    });
+  });
 
-        await expect(lock.withdraw()).to.changeEtherBalances(
-          [owner, lock],
-          [lockedAmount, -lockedAmount]
-        );
-      });
+  describe("Inheritor Management", function () {
+    it("Should allow admin or owner to add inheritors", async function () {
+      await assetManager.addCustomerData("John Doe", "123456", "555-5555", "123 Main St");
+      await assetManager.addCustomerInheritor(1, "Jane Doe", "654321", "555-5556", "456 Main St");
+      const inheritors = await assetManager.getCustomerInheritors(1);
+      expect(inheritors[0].name).to.equal("Jane Doe");
+    });
+  });
+
+  describe("Update and Delete", function () {
+    it("Should allow admin or owner to update customer data", async function () {
+      await assetManager.addCustomerData("John Doe", "123456", "555-5555", "123 Main St");
+      await assetManager.updateCustomerData(1, "John Smith", "123456", "555-5555", "123 Main St");
+      const customer = await assetManager.getCustomerData(1);
+      expect(customer.name).to.equal("John Smith");
+    });
+
+    it("Should allow admin or owner to delete customer data", async function () {
+      await assetManager.addCustomerData("John Doe", "123456", "555-5555", "123 Main St");
+      await assetManager.deleteCustomerData(1);
+      await expect(assetManager.getCustomerData(1)).to.be.revertedWith("Customer does not exist.");
     });
   });
 });
